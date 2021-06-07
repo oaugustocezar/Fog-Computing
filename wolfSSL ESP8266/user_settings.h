@@ -14,17 +14,26 @@
  * This will need fixed before distribution but is OK to test with */
 /* #error "needs solved, see: https://www.wolfssl.com/docs/porting-guide/" */
 #define WOLFSSL_GENSEED_FORTEST
-
+#define TFM_TIMING_RESISTANT
+#define WOLFSSL_SMALL_STACK
+#define WOLFSSL_SMALL_CERT_VERIFY
 /* The remaining added by me: */
-//#define DEBUG_WOLFSSL
-#define USE_CERT_BUFFERS_2048
+#define USE_CERT_BUFFERS_2048 
 #define NO_ASN_TIME
-#define SINGLE_THREADED
-
+#define SINGLE_THREADED 
+//#define NO_RSA
+#define RSA_LOW_MEM
+#define ECC_USER_CURVES
+#define HAVE_SNI
+#define FP_MAX_BITS 512
 #define XTIME fnSecondsSinceEpoch
 #define XGMTIME
 #define ALT_ECC_SIZE
-
+#define HAVE_CHACHA
+//#define HAVE_POLY1305
+#define GCM_SMALL
+#define CURVED25519_SMALL
+#define CURVE25519_SMALL
 #define WOLFSSL_TLS13
 #define HAVE_TLS_EXTENSIONS
 #define HAVE_SUPPORTED_CURVES
