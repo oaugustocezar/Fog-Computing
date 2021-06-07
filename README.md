@@ -1,3 +1,4 @@
-# Requisições HTTP para o servidor
+# Requisições HTTPs para o servidor www.backend-fogcomp.online
 
-O tipo de requisição deve ser passada por parâmetro no arquivo compile.sh 
+
+Envio de localização de forma segura com protocolo TLS 1.3. Utilização da biblioteca wolfSSL para sistemas com poucos recursos. 
