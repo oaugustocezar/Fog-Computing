@@ -18,9 +18,6 @@ WOLFSSL_CTX* ctx = NULL;
 WOLFSSL* ssl = NULL;
 int WiFiSend(WOLFSSL* ssl_cli, char* msg, int sz, void* ctx_cli);
 int WiFiReceive(WOLFSSL* ssl_cli, char* reply, int sz, void* ctx_cli);
-
-
-
 void setup() {
   char errBuf[80];
   int err            = 0;
@@ -76,7 +73,7 @@ void loop() {
   int msgSz;
   char errBuf[80];
   char reply[500];
-  int flagWrite;  
+  int flagWrite;
   ssl = wolfSSL_new(ctx);
   if (ssl == NULL) {
     Serial.println("Unable to allocate SSL object");
@@ -84,7 +81,10 @@ void loop() {
   } else {
     Serial.println("SSL object allocate");
   }
+  unsigned long hst0 = millis();
   err = wolfSSL_connect_TLSv13(ssl);
+  unsigned long hst1 = millis();
+
   if (err != WOLFSSL_SUCCESS) {
     err = wolfSSL_get_error(ssl, 0);
     wolfSSL_ERR_error_string(err, errBuf);
@@ -97,21 +97,31 @@ void loop() {
   Serial.print("SSL cipher suite is ");
   Serial.println(cipherName);
 
+  sprintf(body, "{\"dispositivo\" : \"nodeMCU\", \"ciphersuit\" : \"%s\", \"t0Handshake\" : \"%ul\",\"t1Handshake\" : \"%ul\"}", cipherName, hst0 , hst1 );
+  sprintf(msg, "POST /data HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s", HOST, strlen(body), body);
+  msgSz = (int)strlen(msg);
+  while(wolfSSL_write(ssl, msg, msgSz)<= 0)
+  wolfSSL_read(ssl,reply,sizeof(reply)-1);
+  Serial.println(reply);
+  Serial.println("imprimiu resposta 1");
+
   while (mySerial.available()) {
     gps.encode(mySerial.read());
     gps.f_get_position(&flat, &flon, &age);
     fvel = gps.f_speed_kmph();
-    Serial.print("Latitude");Serial.println(flat);
+    Serial.print("Latitude"); Serial.println(flat);
     smartdelay(0);
     sprintf(body, "{\"latitude\" : \"%.6f\", \"longitude\" : \"%.6f\", \"velocity\" : \"%.6f\"}", flat, flon , fvel );
     sprintf(msg, "POST /data HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s", HOST, strlen(body), body);
     msgSz = (int)strlen(msg);
-    flat = 0.0; flon = 0.0; fvel = 0.0; 
+    flat = 0.0; flon = 0.0; fvel = 0.0;
     flagWrite = 0;
+    unsigned long t0 = millis();
     flagWrite = wolfSSL_write(ssl, msg, msgSz);
     if (flagWrite > 0 ) {
       input = 0;
       input = wolfSSL_read(ssl, reply, sizeof(reply) - 1);
+      unsigned long t1 = millis();
       if (input < 0) {
         err = wolfSSL_get_error(ssl, 0);
         wolfSSL_ERR_error_string(err, errBuf);
