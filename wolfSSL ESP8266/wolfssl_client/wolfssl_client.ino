@@ -4,12 +4,15 @@
 #include <wolfssl.h>
 #include <user_settings.h>
 #include <wolfssl/ssl.h>
-#include <wolfssl/certs_test.h>
 #include <string.h>
 #define PORT 443
-#define HOST "www.backend-fogcomp.online"
+#define HOST "backend-fogcomp.tk"
 #define SSID "HausOfGaga_2G"
 #define PASS "BornThisWay"
+#define CIPHER1 "TLS13-AES128-GCM-SHA256"
+#define CIPHER2 "TLS13-AES256-GCM-SHA384"
+#define CIPHER3 "TLS13-CHACHA20-POLY1305-SHA256"
+
 SoftwareSerial mySerial(13, 15); // RX = D7, TX  = D8
 TinyGPS gps;
 WiFiClient client;
@@ -40,16 +43,14 @@ void setup() {
     if ((ctx = wolfSSL_CTX_new(method)) == NULL) {
       Serial.println("wolfSSL_CTX_new error");
     }
-    err = wolfSSL_CTX_load_verify_buffer(ctx, (const byte*)cert_fog_der_2048, sizeof_cert_fog_der_2048, SSL_FILETYPE_ASN1);
-    if (err != SSL_SUCCESS) {
-      Serial.println("Error loading certs");
-      Serial.println(err);
-    }
 
     err = wolfSSL_CTX_UseSNI(ctx, WOLFSSL_SNI_HOST_NAME, HOST, XSTRLEN(HOST));
     if (err != WOLFSSL_SUCCESS) {
       sprintf(errBuf, "Setting host name failed with error condition: %d and reason %s\n", err , wolfSSL_ERR_error_string(err , errBuf));
       Serial.print(errBuf);
+    }
+    if (wolfSSL_CTX_set_cipher_list(ctx, CIPHER1) != WOLFSSL_SUCCESS) {
+      Serial.println("Deu ruim");
     }
 
     // initialize wolfSSL using callback functions
@@ -61,6 +62,7 @@ void setup() {
     Serial.println("Não foi possível conectar");
   }
 }
+
 void loop() {
   float flat, flon, fvel;
   unsigned long age;
@@ -72,8 +74,11 @@ void loop() {
   const char* cipherName;
   int msgSz;
   char errBuf[80];
-  char reply[500];
+  char reply[1024];
   int flagWrite;
+  unsigned long t0 = 0;
+  unsigned long t1 = 0;
+
   ssl = wolfSSL_new(ctx);
   if (ssl == NULL) {
     Serial.println("Unable to allocate SSL object");
@@ -93,60 +98,63 @@ void loop() {
   }
   Serial.print("SSL version is ");
   Serial.println(wolfSSL_get_version(ssl));
+
   cipherName = wolfSSL_get_cipher(ssl);
   Serial.print("SSL cipher suite is ");
   Serial.println(cipherName);
-
-  sprintf(body, "{\"dispositivo\" : \"nodeMCU\", \"ciphersuit\" : \"%s\", \"t0Handshake\" : \"%ul\",\"t1Handshake\" : \"%ul\"}", cipherName, hst0 , hst1 );
-  sprintf(msg, "POST /data HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s", HOST, strlen(body), body);
+  sprintf(body, "{\"dispositivo\" : \"nodeMCU\", \"t0Handshake\" : \"%ul\",\"t1Handshake\" : \"%ul\" , \"ciphersuit\" : \"%s\"}",  hst0 , hst1, cipherName);
+  sprintf(msg, "POST /data/hstime HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s", HOST, strlen(body), body);
+  //Serial.println(msg);
   msgSz = (int)strlen(msg);
-  while(wolfSSL_write(ssl, msg, msgSz)<= 0)
-  wolfSSL_read(ssl,reply,sizeof(reply)-1);
+  wolfSSL_write(ssl, msg, msgSz);
+  wolfSSL_read(ssl, reply, sizeof(reply) - 1);
   Serial.println(reply);
   Serial.println("imprimiu resposta 1");
 
-  while (mySerial.available()) {
+  while (mySerial.available()) {   
+
     gps.encode(mySerial.read());
     gps.f_get_position(&flat, &flon, &age);
     fvel = gps.f_speed_kmph();
-    Serial.print("Latitude"); Serial.println(flat);
-    smartdelay(0);
-    sprintf(body, "{\"latitude\" : \"%.6f\", \"longitude\" : \"%.6f\", \"velocity\" : \"%.6f\"}", flat, flon , fvel );
+    sprintf(body, "{\"dispositivo\" : \"nodeMCU\",\"ciphersuit\" : \"%s\", \"latitude\" : \"%.6f\", \"longitude\" : \"%.6f\", \"velocity\" : \"%.6f\"}", cipherName, flat, flon , fvel );
     sprintf(msg, "POST /data HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s", HOST, strlen(body), body);
     msgSz = (int)strlen(msg);
     flat = 0.0; flon = 0.0; fvel = 0.0;
     flagWrite = 0;
-    unsigned long t0 = millis();
+    t0 = millis();
     flagWrite = wolfSSL_write(ssl, msg, msgSz);
     if (flagWrite > 0 ) {
       input = 0;
       input = wolfSSL_read(ssl, reply, sizeof(reply) - 1);
-      unsigned long t1 = millis();
-      if (input < 0) {
-        err = wolfSSL_get_error(ssl, 0);
-        wolfSSL_ERR_error_string(err, errBuf);
-        Serial.print("TLS Read Error: ");
-        Serial.println(errBuf);
-      } else if (input > 0) {
-        reply[input] = '\0';
-        Serial.print(reply);
-        Serial.println("Connection complete.");
-        delay(1000);
-      } else {
-        Serial.println();
-      }
-    } else if (flagWrite < 0 || flagWrite == 0) {
-      err = wolfSSL_get_error(ssl, 0);
-      wolfSSL_ERR_error_string(err, errBuf);
-      Serial.print("TLS Write Error: ");
-      Serial.println(errBuf);
+      t1 = millis();
+      reply[input] = '\0';
+      //Serial.print(reply);
+      Serial.println("Connection complete 1");  
+      Serial.println();
+    
     }
-  }
+    sprintf(body, "{\"dispositivo\" : \"nodeMCU\",\"ciphersuit\" : \"%s\", \"t0\" : \"%ul\", \"t1\" : \"%ul\"}", cipherName, t0, t1 );
+    sprintf(msg, "POST /data/commtime HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s", HOST, strlen(body), body);
+    msgSz = (int)strlen(msg);
+    flagWrite = 0;
+    flagWrite = wolfSSL_write(ssl, msg, msgSz);
+    if (flagWrite > 0 ) {
+      input = 0;
+      input = wolfSSL_read(ssl, reply, sizeof(reply) - 1);
+      t1 = millis();
+      reply[input] = '\0';
+      Serial.println("Connection complete 2");      
+      delay(1000);
+      Serial.println();      
+    }
+     
 
+  }
   wolfSSL_shutdown(ssl);
   wolfSSL_free(ssl);
 
 }
+
 int WiFiSend(WOLFSSL* ssl_cli, char* msg, int sz, void* ctx_cli) {
   int sent = 0;
   sent = client.write(msg, sz);
@@ -157,7 +165,6 @@ int WiFiReceive(WOLFSSL* ssl_cli, char* reply, int sz, void* ctx_cli) {
   while (!client.available()) {}
   while (client.available() > 0 && ret < sz) {
     reply[ret++] = client.read();
-    yield();
   }
   return ret;
 }
@@ -169,7 +176,7 @@ static void smartdelay(unsigned long ms)
   {
     while (mySerial.available()) {
       gps.encode(mySerial.read());
-      yield();
+      
     }
   } while (millis() - start < ms);
 }
