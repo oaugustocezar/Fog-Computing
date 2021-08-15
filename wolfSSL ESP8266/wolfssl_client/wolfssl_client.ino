@@ -7,8 +7,8 @@
 #include <string.h>
 #define PORT 443
 #define HOST "backend-fogcomp.tk"
-#define SSID "HausOfGaga_2G"
-#define PASS "BornThisWay"
+#define SSID "celguto"
+#define PASS "augusto1"
 #define CIPHER1 "TLS13-AES128-GCM-SHA256"
 #define CIPHER2 "TLS13-AES256-GCM-SHA384"
 #define CIPHER3 "TLS13-CHACHA20-POLY1305-SHA256"
@@ -110,8 +110,9 @@ void loop() {
   wolfSSL_read(ssl, reply, sizeof(reply) - 1);
   Serial.println(reply);
   Serial.println("imprimiu resposta 1");
+  int count = 0;
 
-  while (mySerial.available()) {   
+  while (mySerial.available() && count < 2) {   
 
     gps.encode(mySerial.read());
     gps.f_get_position(&flat, &flon, &age);
@@ -146,6 +147,10 @@ void loop() {
       Serial.println("Connection complete 2");      
       delay(1000);
       Serial.println();      
+    }
+    count ++; 
+    if(count == 2){
+      ESP.restart();
     }
      
 
